@@ -429,10 +429,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
         } else if (name === "zrange") {
             const { key, start, stop, withScores } = ZSetRangeArgumentsSchema.parse(args);
-            const members = await redisClient.zRange(key, start, stop, {
-                REV: false,
-                WITHSCORES: withScores,
-            });
+            
+            let options = {};
+            if (withScores) {
+                options = { WITHSCORES: true };
+            }
+            
+            const members = await redisClient.zRange(key, start, stop, options);
+            
             return {
                 content: [{
                     type: "text",
@@ -480,7 +484,8 @@ async function runServer() {
     try {
         await redisClient.connect();
         const transport = new StdioServerTransport();
-        await server.listen(transport);
+        await server.connect(transport);
+        console.log('Server started successfully');
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
