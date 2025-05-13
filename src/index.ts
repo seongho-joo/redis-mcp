@@ -482,14 +482,33 @@ redisClient.on('connect', () => {
 // Start the server
 async function runServer() {
     try {
+        // Connect to Redis
         await redisClient.connect();
+
+        // Set up MCP server
         const transport = new StdioServerTransport();
         await server.connect(transport);
-        console.log('Server started successfully');
+        console.error("Redis MCP Server running on stdio");
     } catch (error) {
-        console.error('Failed to start server:', error);
+        const err = error as Error;
+        console.error("[Redis Fatal] Server initialization failed");
+        console.error(`[Redis Fatal] Error: ${err.name}: ${err.message}`);
+        console.error(`[Redis Fatal] Connection: ${REDIS_URL}`);
+        console.error(`[Redis Fatal] Stack: ${err.stack}`);
+        await redisClient.quit().catch(() => {});
         process.exit(1);
     }
 }
+
+// Handle process termination
+process.on('SIGINT', async () => {
+    await redisClient.quit().catch(() => {});
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    await redisClient.quit().catch(() => {});
+    process.exit(0);
+});
 
 runServer(); 
