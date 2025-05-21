@@ -110,6 +110,17 @@ const ZSetRemoveArgumentsSchema = z.object({
     members: z.array(z.string()),
 });
 
+// JSON schemas
+const JsonSetArgumentsSchema = z.object({
+    key: z.string(),
+    value: z.any(),
+    expireSeconds: z.number().optional(),
+});
+
+const JsonGetArgumentsSchema = z.object({
+    key: z.string(),
+});
+
 // Create server instance
 const server = new Server(
     {
@@ -314,6 +325,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     required: ["key", "members"],
                 },
             },
+            // JSON operations
+            {
+                name: "json_set",
+                description: "Store a JSON value in Redis",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        key: { type: "string", description: "Redis key" },
+                        value: { type: "object", description: "JSON value to store" },
+                        expireSeconds: { type: "number", description: "Optional expiration time in seconds" },
+                    },
+                    required: ["key", "value"],
+                },
+            },
+            {
+                name: "json_get",
+                description: "Get JSON value by key from Redis",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        key: { type: "string", description: "Redis key to retrieve" },
+                    },
+                    required: ["key"],
+                },
+            },
         ],
     };
 });
@@ -452,6 +488,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             await redisClient.zRem(key, members);
             return {
                 content: [{ type: "text", text: `Successfully removed ${members.length} members from sorted set ${key}` }],
+            };
+        }
+        // JSON operations
+        else if (name === "json_set") {
+            const { key, value, expireSeconds } = JsonSetArgumentsSchema.parse(args);
+            await redisClient.json.set(key, '$', value);
+            if (expireSeconds) {
+                await redisClient.expire(key, expireSeconds);
+            }
+            return {
+                content: [{ type: "text", text: `Successfully set JSON for key: ${key}` }],
+            };
+        } else if (name === "json_get") {
+            const { key } = JsonGetArgumentsSchema.parse(args);
+            const value = await redisClient.json.get(key);
+            if (value === null) {
+                return {
+                    content: [{ type: "text", text: `Key not found: ${key}` }],
+                };
+            }
+            return {
+                content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
             };
         } else {
             throw new Error(`Unknown tool: ${name}`);
